@@ -1,13 +1,14 @@
 import os, sys, re
+
 def main():
     while True:
         command = input("$ ")
         if command == "exit":
             break
-        elif command == "help":
-            print("psh: simple shell written in python")
         elif command[:3] == "cd ":
             psh_cd(command[3:])
+        elif (command.find(">") != -1):
+            redirect_command(command)
         else:
             execute_commands(command)
 
@@ -52,6 +53,31 @@ def execute_commands(command):
             sys.exit(1)
     else:
         os.wait()
+
+def redirect_command(command):
+    rc = os.fork()
+    if rc < 0:
+        sys.exit(1)
+
+    elif rc == 0:
+        args = [command.strip().split()[0]]
+
+        os.close(1)
+        sys.stdout = open(command.strip().split()[2], "w")
+        os.set_inheritable(1, True)
+
+        for dir in re.split(":", os.environ['PATH']):
+            program = "%s/%s" % (dir, args[0])
+            try:
+                os.execve(program, args, os.environ)
+            except FileNotFoundError:
+                pass
+
+        os.write(2, ("%s: command not found\n" % args[0]).encode())
+        os.wait()
+        sys.exit(1)
+    else:
+        childPidCode = os.wait()
 
 
 def psh_cd(command):
