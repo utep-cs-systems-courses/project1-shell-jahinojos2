@@ -1,5 +1,4 @@
 import os, sys, re
-import subprocess
 def main():
     while True:
         command = input("$ ")
@@ -13,11 +12,47 @@ def main():
             execute_commands(command)
 
 def execute_commands(command):
-    try:
-        subprocess.run(command.split())
+    rc = os.fork()
+    if rc < 0:
+        sys.exit(1)
 
-    except Exception:
-        print("psh: command not found: {}".format(command))
+    elif rc == 0:
+        if "|" in command:
+            stdin, stdout = (0, 0)
+            stdin = os.dup(0)
+            stdout = os.dup(1)
+
+            fileIn = os.dup(stdout)
+
+            for cmd in command.split("|"):
+                os.dup2(fileIn, 0)
+                os.close(fileIn)
+                if cmd == command.split("|")[-1]:
+                    fileOut = os.dup(stdout)
+                else:
+                    fileIn, fileOut = os.pipe()
+
+                os.dup2(fileOut, 1)
+                os.close(fileOut)
+
+                try:
+                    print("It has been piped")
+
+                except Exception:
+                    pass
+        else:
+            args = [command.strip().split()[0]]
+            for dir in re.split(":", os.environ['PATH']):
+                program = "%s/%s" % (dir, args[0])
+                try:
+                    os.execve(program, args, os.environ)
+                except FileNotFoundError:
+                    pass
+            os.write(2, ("%s: command not found\n" % args[0]).encode())
+            sys.exit(1)
+    else:
+        os.wait()
+
 
 def psh_cd(command):
     """convert to absolute path change directory"""
